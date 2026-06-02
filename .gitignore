@@ -1,0 +1,51 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+*.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Testing
+coverage
+.nyc_output
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-journal
+
+# Databases (any location) - 보안: DB 파일 절대 커밋 금지
+*.db
+*.db-journal
+*.sqlite
+**/dev.db
+**/test.db
+# 로컬 툴링
+.claude/
+
