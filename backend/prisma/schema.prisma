@@ -1,4 +1,4 @@
-﻿// This is your Prisma schema file,
+// This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -10,7 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 怨좉컼 ?뺣낫 (湲곕뒫 01, 02, 03, 05)
+// 고객 정보 (기능 01, 02, 03, 05)
 model Customer {
   id        Int      @id @default(autoincrement())
   name      String
@@ -25,37 +25,38 @@ model Customer {
   mailLogs       MailLog[]
 }
 
-// ?덉빟 硫붿씪 (湲곕뒫 10, 11)
+// 예약 메일 (기능 10, 11)
 model ScheduledMail {
-  id          Int                  @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   customerId  Int?
-  customer    Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   toEmail     String
   subject     String
   body        String
   scheduledAt DateTime
-  status      String               @default("PENDING") // PENDING | SENT | CANCELLED | FAILED
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  status      String    @default("PENDING") // PENDING | SENT | CANCELLED | FAILED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
-// 諛쒖넚 湲곕줉 (湲곕뒫 12)
+// 발송 기록 (기능 12)
 model MailLog {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   customerId   Int?
   customer     Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   toEmail      String
   subject      String
   body         String
-  sentAt       DateTime @default(now())
-  status       String   @default("SUCCESS") // SUCCESS | FAILED
+  sentAt       DateTime  @default(now())
+  status       String    @default("SUCCESS") // SUCCESS | FAILED
   errorMessage String?
 }
 
-// SMTP ?ㅼ젙 (湲곕뒫 09) - ?⑥씪 ?ㅼ젙 ?덉퐫??model SmtpConfig {
+// SMTP 설정 (기능 09) - 단일 설정 레코드
+model SmtpConfig {
   id        Int      @id @default(autoincrement())
   email     String
-  password  String   // Google App Password
+  password  String // Google App Password
   host      String   @default("smtp.gmail.com")
   port      Int      @default(587)
   createdAt DateTime @default(now())
