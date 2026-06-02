@@ -1,5 +1,4 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { GenerateDraftDto } from './dto/generate-draft.dto';
 import { ChangeToneDto, ToneType } from './dto/change-tone.dto';
@@ -7,23 +6,51 @@ import { TranslateDto } from './dto/translate.dto';
 
 @Injectable()
 export class AiService {
-  private anthropic: Anthropic;
+  private readonly apiKey = process.env.GEMINI_API_KEY || '';
+  private readonly model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-  constructor(private readonly prisma: PrismaService) {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+  constructor(private readonly prisma: PrismaService) {}
+
+  // Gemini 호출 (응답을 JSON 텍스트로 받음)
+  private async callGemini(prompt: string): Promise<string> {
+    if (!this.apiKey) throw new BadRequestException('GEMINI_API_KEY가 설정되지 않았습니다.');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 }, // 2.5 모델의 '사고' 비활성화 → 본문 출력 보장
+        },
+      }),
     });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new BadRequestException(`AI 호출 실패(${res.status}): ${err.slice(0, 200)}`);
+    }
+    const data: any = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  }
+
+  private parseJson(text: string): { subject: string; body: string } {
+    try {
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('JSON not found');
+      return JSON.parse(m[0]);
+    } catch {
+      throw new BadRequestException('AI 응답 파싱에 실패했습니다. 다시 시도해주세요.');
+    }
   }
 
   // 기능 06: AI 맞춤 메일 초안 작성
   async generateDraft(dto: GenerateDraftDto): Promise<{ subject: string; body: string }> {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: dto.customerId },
-    });
+    const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
     if (!customer) {
       throw new NotFoundException(`고객을 찾을 수 없습니다: ID ${dto.customerId}`);
     }
-
     const memo = customer.memo || '(메모 없음)';
     const additionalContext = dto.additionalContext || '';
 
@@ -45,22 +72,7 @@ ${additionalContext ? `\n[추가 맥락]\n${additionalContext}` : ''}
 
 {"subject": "이메일 제목", "body": "이메일 본문 내용"}`;
 
-    const response = await this.anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
-
-    try {
-      // JSON 파싱 시도
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('JSON not found');
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      throw new BadRequestException('AI 응답 파싱에 실패했습니다. 다시 시도해주세요.');
-    }
+    return this.parseJson(await this.callGemini(prompt));
   }
 
   // 기능 07: 메일 말투 변경
@@ -85,21 +97,7 @@ ${dto.body}
 
 {"subject": "변환된 제목", "body": "변환된 본문"}`;
 
-    const response = await this.anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
-
-    try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('JSON not found');
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      throw new BadRequestException('AI 응답 파싱에 실패했습니다. 다시 시도해주세요.');
-    }
+    return this.parseJson(await this.callGemini(prompt));
   }
 
   // 기능 08: 다국어 메일 번역
@@ -119,20 +117,6 @@ ${dto.body}
 
 {"subject": "번역된 제목", "body": "번역된 본문"}`;
 
-    const response = await this.anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
-
-    try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('JSON not found');
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      throw new BadRequestException('AI 응답 파싱에 실패했습니다. 다시 시도해주세요.');
-    }
+    return this.parseJson(await this.callGemini(prompt));
   }
 }
